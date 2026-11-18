@@ -8,7 +8,7 @@ La diferencia principal que observamos es cómo se representan los destinos. En 
 
 ## 2. Script de envío (ítem 5)
 
-Elegimos recibir los datos como argumentos de terminal para poder repetir los envíos sin modificar el código. Colocamos primero el destino final, luego el mensaje y al final el router de entrada:
+Elegimos recibir los datos como argumentos de terminal para poder repetir los envíos sin modificar el código. En la versión sin TTL colocamos primero el destino final, luego el mensaje y al final el router de entrada:
 
 ```text
 python enviar.py IP_final puerto_final "mensaje" IP_envio puerto_envio
@@ -237,3 +237,16 @@ Usamos los puertos 8880 y 8886 para R0 y R6. En sus tablas agregamos rutas hacia
 127.0.0.1/24 8883 8883 127.0.0.1 8883
 127.0.0.1/24 8884 8885 127.0.0.1 8882
 ```
+
+## 8. Incorporación del campo TTL
+
+Seguimos la distribución sugerida: cuatro bytes de IP, dos de puerto y uno de TTL, antes del mensaje. Mantener posiciones fijas nos permite separar el header sin delimitadores. `parse_packet()` devuelve el TTL como entero y `create_packet()` lo escribe en un byte; el mensaje sigue siendo bytes.
+
+Agregamos el TTL al final de los argumentos del emisor para conservar el orden anterior. Su interfaz actual es:
+
+```text
+python enviar.py IP_final puerto_final "mensaje" IP_envio puerto_envio TTL
+python enviar.py 127.0.0.1 8883 "hola" 127.0.0.1 8881 10
+```
+
+El emisor exige un TTL inicial entre 1 y 255. Las funciones de paquetes también admiten cero, porque un paquete puede alcanzar ese valor durante el recorrido. Construimos manualmente un paquete con TTL 10 y comprobamos que parsearlo y reconstruirlo recupera exactamente sus bytes. También probamos TTL 0, 1 y 255, mensajes vacíos, binarios y UTF-8, y la recepción UDP del paquete generado por el emisor. En esta etapa todavía no disminuimos el TTL ni descartamos paquetes por su valor.

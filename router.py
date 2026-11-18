@@ -4,20 +4,22 @@ import sys
 
 
 def parse_packet(IP_packet: bytes):
-    if len(IP_packet) < 6:
-        raise ValueError("El paquete debe contener al menos 6 bytes de header.")
+    if len(IP_packet) < 7:
+        raise ValueError("El paquete debe contener al menos 7 bytes de header.")
 
     return {
         "ip": socket.inet_ntop(socket.AF_INET, IP_packet[:4]),
         "puerto": int.from_bytes(IP_packet[4:6], byteorder="big"),
-        "mensaje": IP_packet[6:],
+        "ttl": IP_packet[6],
+        "mensaje": IP_packet[7:],
     }
 
 
 def create_packet(parsed_IP_packet):
     ip = socket.inet_pton(socket.AF_INET, parsed_IP_packet["ip"])
     puerto = parsed_IP_packet["puerto"].to_bytes(2, byteorder="big")
-    return ip + puerto + parsed_IP_packet["mensaje"]
+    ttl = parsed_IP_packet["ttl"].to_bytes(1, byteorder="big")
+    return ip + puerto + ttl + parsed_IP_packet["mensaje"]
 
 
 def check_routes(
