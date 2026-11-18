@@ -25,3 +25,98 @@ Elegimos guardar los turnos en un diccionario propio de cada router y pasarlo a 
 Con las tablas `v3` del enunciado enviamos ocho mensajes de R1 a R5. Todos llegaron y R2 alternó entre R3 y R4. Algunos paquetes volvieron a pasar por R2 antes de llegar: round-robin reparte los envíos, pero no asegura el camino más corto ni evita ciclos.
 
 Para la red ampliada creamos las tablas `v4`. Asignamos el puerto 8880 a R0 y el 8886 a R6. En R2 agregamos una alternativa por R0 hacia el área de R1 y otra por R6 hacia el área de R5. Intercalamos seis envíos en cada sentido: los doce llegaron. R2 mantuvo las secuencias R3–R4–R6 hacia R5 y R1–R0 hacia R1, sin que una avanzara el turno de la otra.
+
+## 4. Router default (ítem 9)
+
+Creamos las tablas `v5` a partir de la red ampliada para conservar las configuraciones anteriores. Agregamos al final de cada tabla esta ruta:
+
+```text
+0.0.0.0/0 0 65535 127.0.0.1 7000
+```
+
+Elegimos la última posición porque `check_routes()` conserva la primera área coincidente. Así, las rutas internas tienen prioridad y solo los demás destinos van al default. El prefijo /0 cubre cualquier dirección IPv4 y el rango 0–65535 cubre todos los puertos.
+
+Para conectar el default con los siete routers, su tabla contiene una ruta directa a cada uno. No le agregamos una ruta hacia sí mismo: como no simulamos el resto de Internet, descarta los destinos externos al no encontrar ruta. Así evitamos que el paquete vuelva a circular por nuestra red.
+
+Probamos los ocho routers en ejecución y enviamos un paquete con destino final `192.0.2.1:9000` desde cada router R0–R6. Los siete llegaron al default, donde se descartaron por falta de ruta. La dirección externa solo figuraba en el header; los envíos UDP se mantuvieron en localhost. También verificamos la entrega de R1 a R5 y del default a R1. No fue necesario modificar el código.
+
+Las tablas resultantes son las siguientes. Cada fila contiene red, puerto inicial, puerto final, IP del siguiente salto y puerto del siguiente salto.
+
+**rutas_R0_v5.txt**
+
+```text
+127.0.0.1/24 8881 8881 127.0.0.1 8881
+127.0.0.1/24 8882 8886 127.0.0.1 8882
+0.0.0.0/0 0 65535 127.0.0.1 7000
+```
+
+**rutas_R1_v5.txt**
+
+```text
+127.0.0.1/24 8880 8880 127.0.0.1 8880
+127.0.0.1/24 8882 8886 127.0.0.1 8882
+0.0.0.0/0 0 65535 127.0.0.1 7000
+```
+
+**rutas_R2_v5.txt**
+
+```text
+127.0.0.1/24 8880 8881 127.0.0.1 8881
+127.0.0.1/24 8880 8881 127.0.0.1 8880
+127.0.0.1/24 8883 8886 127.0.0.1 8883
+127.0.0.1/24 8883 8886 127.0.0.1 8884
+127.0.0.1/24 8883 8886 127.0.0.1 8886
+0.0.0.0/0 0 65535 127.0.0.1 7000
+```
+
+**rutas_R3_v5.txt**
+
+```text
+127.0.0.1/24 8880 8882 127.0.0.1 8882
+127.0.0.1/24 8880 8882 127.0.0.1 8885
+127.0.0.1/24 8884 8885 127.0.0.1 8882
+127.0.0.1/24 8884 8885 127.0.0.1 8885
+127.0.0.1/24 8886 8886 127.0.0.1 8886
+0.0.0.0/0 0 65535 127.0.0.1 7000
+```
+
+**rutas_R4_v5.txt**
+
+```text
+127.0.0.1/24 8880 8883 127.0.0.1 8882
+127.0.0.1/24 8880 8883 127.0.0.1 8885
+127.0.0.1/24 8885 8885 127.0.0.1 8882
+127.0.0.1/24 8885 8885 127.0.0.1 8885
+127.0.0.1/24 8886 8886 127.0.0.1 8882
+0.0.0.0/0 0 65535 127.0.0.1 7000
+```
+
+**rutas_R5_v5.txt**
+
+```text
+127.0.0.1/24 8880 8884 127.0.0.1 8884
+127.0.0.1/24 8880 8884 127.0.0.1 8883
+127.0.0.1/24 8886 8886 127.0.0.1 8883
+0.0.0.0/0 0 65535 127.0.0.1 7000
+```
+
+**rutas_R6_v5.txt**
+
+```text
+127.0.0.1/24 8880 8882 127.0.0.1 8882
+127.0.0.1/24 8883 8883 127.0.0.1 8883
+127.0.0.1/24 8884 8885 127.0.0.1 8882
+0.0.0.0/0 0 65535 127.0.0.1 7000
+```
+
+**rutas_default_v5.txt**
+
+```text
+127.0.0.1/24 8880 8880 127.0.0.1 8880
+127.0.0.1/24 8881 8881 127.0.0.1 8881
+127.0.0.1/24 8882 8882 127.0.0.1 8882
+127.0.0.1/24 8883 8883 127.0.0.1 8883
+127.0.0.1/24 8884 8884 127.0.0.1 8884
+127.0.0.1/24 8885 8885 127.0.0.1 8885
+127.0.0.1/24 8886 8886 127.0.0.1 8886
+```
