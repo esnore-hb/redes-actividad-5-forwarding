@@ -250,3 +250,16 @@ python enviar.py 127.0.0.1 8883 "hola" 127.0.0.1 8881 10
 ```
 
 El emisor exige un TTL inicial entre 1 y 255. Las funciones de paquetes también admiten cero, porque un paquete puede alcanzar ese valor durante el recorrido. Construimos manualmente un paquete con TTL 10 y comprobamos que parsearlo y reconstruirlo recupera exactamente sus bytes. También probamos TTL 0, 1 y 255, mensajes vacíos, binarios y UTF-8, y la recepción UDP del paquete generado por el emisor. En esta etapa todavía no disminuimos el TTL ni descartamos paquetes por su valor.
+
+## 9. Envío de un archivo línea por línea
+
+Elegimos usar `mensajes.txt`, ubicado junto al script, como archivo predeterminado para mantener los tres argumentos pedidos. Agregamos un cuarto argumento opcional para probar otros archivos sin cambiar el código:
+
+```text
+python prueba_router.py "127.0.0.1;8885;10" 127.0.0.1 8881
+python prueba_router.py "127.0.0.1;8885;10" 127.0.0.1 8881 otro_archivo.txt
+```
+
+Las comillas evitan que PowerShell interprete los puntos y coma como comandos separados. Leemos el archivo en UTF-8 y enviamos cada línea en un datagrama distinto, reutilizando `create_packet()`. Quitamos únicamente el salto de línea; conservamos los espacios y las líneas vacías. Cada paquete parte con el mismo TTL inicial, porque corresponde a un mensaje independiente.
+
+Probamos el archivo predeterminado en la red R1 → R2 → R3 con destino R3 y TTL 10: llegaron las tres líneas. También comprobamos un archivo alternativo con saltos CRLF, una línea vacía, espacios, caracteres con tilde y una última línea sin salto final. Los mensajes recuperados coincidieron con el contenido esperado. Esta prueba verifica el envío; la observación del orden con cinco routers corresponde a la siguiente sección de pruebas.

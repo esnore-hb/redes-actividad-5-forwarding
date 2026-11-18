@@ -1,0 +1,3 @@
+Línea 1: hola desde el archivo.
+Línea 2: mensaje con espacios y ñ.
+Línea 3: último mensaje.
