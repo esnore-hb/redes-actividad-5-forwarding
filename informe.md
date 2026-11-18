@@ -120,3 +120,16 @@ Las tablas resultantes son las siguientes. Cada fila contiene red, puerto inicia
 127.0.0.1/24 8885 8885 127.0.0.1 8885
 127.0.0.1/24 8886 8886 127.0.0.1 8886
 ```
+
+## 5. Prueba de una tabla incorrecta sin TTL
+
+Guardamos el error en `rutas_R2_v2_incorrecta.txt` para conservar la tabla correcta. Mantuvimos las tablas `v2` de R1 y R3 y cambiamos en R2 el siguiente salto hacia el puerto 8883 por el puerto 8881:
+
+```text
+127.0.0.1/24 8881 8881 127.0.0.1 8881
+127.0.0.1/24 8883 8883 127.0.0.1 8881
+```
+
+Enviamos un solo mensaje a R3 entrando por R1. Capturamos doce reenvíos consecutivos alternando R1 → R2 y R2 → R1, sin cambios en los bytes ni en el destino final del paquete. R3 no recibió el mensaje durante la prueba y detuvimos los tres procesos al confirmar el ciclo.
+
+El error hace que R2 devuelva a R1 lo que debería enviar a R3. Como R1 vuelve a elegir R2 y todavía no hay TTL, el código no tiene una condición que limite esos reenvíos.
