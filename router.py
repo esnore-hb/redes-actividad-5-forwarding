@@ -1,3 +1,4 @@
+import socket
 import sys
 
 
@@ -16,6 +17,12 @@ def main():
     print(f"IP del router: {router_ip}")
     print(f"Puerto del router: {router_puerto}")
     print(f"Archivo de rutas: {rutas_archivo}")
+
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as router_socket:
+        router_socket.bind((router_ip, router_puerto))
+        print(f"Esperando un paquete UDP en {router_ip}:{router_puerto}...", flush=True)
+        paquete, remitente = router_socket.recvfrom(65535)
+        print(f"Paquete recibido de {remitente}: {paquete!r}")
 
 
 if __name__ == "__main__":
