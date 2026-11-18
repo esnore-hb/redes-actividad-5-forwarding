@@ -263,3 +263,11 @@ python prueba_router.py "127.0.0.1;8885;10" 127.0.0.1 8881 otro_archivo.txt
 Las comillas evitan que PowerShell interprete los puntos y coma como comandos separados. Leemos el archivo en UTF-8 y enviamos cada línea en un datagrama distinto, reutilizando `create_packet()`. Quitamos únicamente el salto de línea; conservamos los espacios y las líneas vacías. Cada paquete parte con el mismo TTL inicial, porque corresponde a un mensaje independiente.
 
 Probamos el archivo predeterminado en la red R1 → R2 → R3 con destino R3 y TTL 10: llegaron las tres líneas. También comprobamos un archivo alternativo con saltos CRLF, una línea vacía, espacios, caracteres con tilde y una última línea sin salto final. Los mensajes recuperados coincidieron con el contenido esperado. Esta prueba verifica el envío; la observación del orden con cinco routers corresponde a la siguiente sección de pruebas.
+
+## 10. Tabla incorrecta con TTL inicial 10
+
+Repetimos la prueba de tres routers con `rutas_R2_v2_incorrecta.txt`: R2 devuelve a R1 los paquetes destinados a R3. Enviamos un único mensaje a R3 entrando por R1, esta vez con TTL 10.
+
+Observamos diez reenvíos, cinco por router. R1 envió con TTL 9, 7, 5, 3 y 1; R2 con TTL 8, 6, 4, 2 y 0. Al volver a R1 con TTL cero, el paquete se descartó y apareció el aviso correspondiente. R3 no recibió el mensaje.
+
+Sin TTL habíamos detenido la prueba después de capturar doce reenvíos porque el paquete seguía circulando. Con TTL el ciclo terminó por el descarte, sin detener los procesos para frenarlo. El TTL no corrige la tabla ni permite llegar a R3, pero limita cuántos saltos puede consumir un paquete mal encaminado. Detuvimos los tres routers al finalizar la comprobación.
