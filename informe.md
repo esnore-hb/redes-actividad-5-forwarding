@@ -133,3 +133,22 @@ Guardamos el error en `rutas_R2_v2_incorrecta.txt` para conservar la tabla corre
 Enviamos un solo mensaje a R3 entrando por R1. Capturamos doce reenvíos consecutivos alternando R1 → R2 y R2 → R1, sin cambios en los bytes ni en el destino final del paquete. R3 no recibió el mensaje durante la prueba y detuvimos los tres procesos al confirmar el ciclo.
 
 El error hace que R2 devuelva a R1 lo que debería enviar a R3. Como R1 vuelve a elegir R2 y todavía no hay TTL, el código no tiene una condición que limite esos reenvíos.
+
+## 6. Saltos en la red de cinco routers sin TTL
+
+Iniciamos los cinco routers con las tablas `v3` y los turnos en cero. Enviamos ocho mensajes distintos de R1 a R5, uno por uno, esperando cada entrega para identificar sus reenvíos. Contamos solo los saltos entre routers; el envío inicial del script a R1 no se incluye.
+
+| Paquete | Recorrido observado | Saltos |
+|---|---|---:|
+| 1 | R1 → R2 → R3 → R2 → R4 → R2 → R3 → R5 | 7 |
+| 2 | R1 → R2 → R4 → R5 | 3 |
+| 3 | R1 → R2 → R3 → R2 → R4 → R2 → R3 → R5 | 7 |
+| 4 | R1 → R2 → R4 → R5 | 3 |
+| 5 | R1 → R2 → R3 → R2 → R4 → R2 → R3 → R5 | 7 |
+| 6 | R1 → R2 → R4 → R5 | 3 |
+| 7 | R1 → R2 → R3 → R2 → R4 → R2 → R3 → R5 | 7 |
+| 8 | R1 → R2 → R4 → R5 | 3 |
+
+Los ocho mensajes llegaron, pero sus recorridos variaron entre 3 y 7 saltos. El mínimo de la topología es tres: R1 → R2 → R3 → R5, o por R4 en lugar de R3. Los recorridos más largos volvieron a pasar por routers anteriores antes de llegar.
+
+Comprobamos que R2 alternó entre R3 y R4 en sus 16 reenvíos, incluyendo las visitas repetidas de un mismo paquete. Esto explica que no haya necesariamente una única elección de R2 por mensaje. Observamos que round-robin reparte los siguientes saltos, pero no selecciona el camino mínimo. Estos resultados corresponden a esta secuencia de envíos; no garantizan la entrega de cualquier paquete sin TTL.
