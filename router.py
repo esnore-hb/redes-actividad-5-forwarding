@@ -21,10 +21,12 @@ def create_packet(parsed_IP_packet):
 
 
 def check_routes(
-    routes_file_name: str, destination_address: tuple[str, int]
+    routes_file_name: str, destination_address: tuple[str, int], turnos: dict
 ) -> tuple[str, int] | None:
     ip_destino = ipaddress.ip_address(destination_address[0])
     puerto_destino = destination_address[1]
+    area_elegida = None
+    opciones = []
 
     with open(routes_file_name, encoding="utf-8") as archivo:
         for linea in archivo:
@@ -33,13 +35,24 @@ def check_routes(
                 continue
 
             red, puerto_inicial, puerto_final, ip_siguiente, puerto_siguiente = linea.split()
+            red = ipaddress.ip_network(red, strict=False)
+            area = (red, int(puerto_inicial), int(puerto_final))
             if (
-                ip_destino in ipaddress.ip_network(red, strict=False)
-                and int(puerto_inicial) <= puerto_destino <= int(puerto_final)
+                ip_destino in red
+                and area[1] <= puerto_destino <= area[2]
             ):
-                return ip_siguiente, int(puerto_siguiente)
+                if area_elegida is None:
+                    area_elegida = area
+                if area == area_elegida:
+                    opciones.append((ip_siguiente, int(puerto_siguiente)))
 
-    return None
+    if not opciones:
+        return None
+
+    clave = (routes_file_name, area_elegida)
+    turno = turnos.get(clave, 0) % len(opciones)
+    turnos[clave] = (turno + 1) % len(opciones)
+    return opciones[turno]
 
 
 def main():
@@ -53,6 +66,7 @@ def main():
         sys.exit("El puerto debe ser un número entero.")
 
     rutas_archivo = sys.argv[3]
+    turnos = {}
 
     print(f"IP del router: {router_ip}")
     print(f"Puerto del router: {router_puerto}")
@@ -71,7 +85,7 @@ def main():
                 print(campos["mensaje"].decode("utf-8"), flush=True)
                 continue
 
-            siguiente_salto = check_routes(rutas_archivo, destino)
+            siguiente_salto = check_routes(rutas_archivo, destino, turnos)
             if siguiente_salto is None:
                 print(f"No hay rutas hacia {destino} para paquete {paquete!r}", flush=True)
                 continue
