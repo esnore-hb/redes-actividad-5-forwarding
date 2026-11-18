@@ -61,8 +61,27 @@ def main():
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as router_socket:
         router_socket.bind((router_ip, router_puerto))
         print(f"Esperando un paquete UDP en {router_ip}:{router_puerto}...", flush=True)
-        paquete, remitente = router_socket.recvfrom(65535)
-        print(f"Paquete recibido de {remitente}: {paquete!r}")
+        while True:
+            paquete, _ = router_socket.recvfrom(65535)
+            campos = parse_packet(paquete)
+            destino = (campos["ip"], campos["puerto"])
+            direccion_actual = (router_ip, router_puerto)
+
+            if destino == direccion_actual:
+                print(campos["mensaje"].decode("utf-8"), flush=True)
+                continue
+
+            siguiente_salto = check_routes(rutas_archivo, destino)
+            if siguiente_salto is None:
+                print(f"No hay rutas hacia {destino} para paquete {paquete!r}", flush=True)
+                continue
+
+            router_socket.sendto(paquete, siguiente_salto)
+            print(
+                f"redirigiendo paquete {paquete!r} con destino final {destino} "
+                f"desde {direccion_actual} hacia {siguiente_salto}",
+                flush=True,
+            )
 
 
 if __name__ == "__main__":
