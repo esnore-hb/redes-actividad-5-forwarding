@@ -152,3 +152,88 @@ Iniciamos los cinco routers con las tablas `v3` y los turnos en cero. Enviamos o
 Los ocho mensajes llegaron, pero sus recorridos variaron entre 3 y 7 saltos. El mínimo de la topología es tres: R1 → R2 → R3 → R5, o por R4 en lugar de R3. Los recorridos más largos volvieron a pasar por routers anteriores antes de llegar.
 
 Comprobamos que R2 alternó entre R3 y R4 en sus 16 reenvíos, incluyendo las visitas repetidas de un mismo paquete. Esto explica que no haya necesariamente una única elección de R2 por mensaje. Observamos que round-robin reparte los siguientes saltos, pero no selecciona el camino mínimo. Estos resultados corresponden a esta secuencia de envíos; no garantizan la entrega de cualquier paquete sin TTL.
+
+## 7. Saltos en la red ampliada sin TTL
+
+Reiniciamos los siete routers con las tablas `v4` y los turnos en cero. Intercalamos seis mensajes R1 → R5 y seis R5 → R1, esperando cada entrega antes del siguiente envío. Contamos únicamente los reenvíos entre routers.
+
+| Paquete | Sentido | Recorrido observado | Saltos |
+|---|---|---|---:|
+| 1 | R1 → R5 | R1 → R2 → R3 → R2 → R4 → R2 → R6 → R2 → R3 → R5 | 9 |
+| 2 | R5 → R1 | R5 → R4 → R2 → R1 | 3 |
+| 3 | R1 → R5 | R1 → R2 → R4 → R5 | 3 |
+| 4 | R5 → R1 | R5 → R3 → R2 → R0 → R1 | 4 |
+| 5 | R1 → R5 | R1 → R2 → R6 → R2 → R3 → R2 → R4 → R2 → R6 → R2 → R3 → R5 | 11 |
+| 6 | R5 → R1 | R5 → R4 → R5 → R3 → R5 → R4 → R2 → R1 | 7 |
+| 7 | R1 → R5 | R1 → R2 → R4 → R5 | 3 |
+| 8 | R5 → R1 | R5 → R3 → R2 → R0 → R1 | 4 |
+| 9 | R1 → R5 | R1 → R2 → R6 → R2 → R3 → R2 → R4 → R2 → R6 → R2 → R3 → R5 | 11 |
+| 10 | R5 → R1 | R5 → R4 → R5 → R3 → R5 → R4 → R2 → R1 | 7 |
+| 11 | R1 → R5 | R1 → R2 → R4 → R5 | 3 |
+| 12 | R5 → R1 | R5 → R3 → R2 → R0 → R1 | 4 |
+
+Los doce mensajes llegaron. El mínimo sigue siendo tres saltos en ambos sentidos. De R1 a R5 observamos entre 3 y 11 saltos. De R5 a R1 observamos entre 3 y 7 saltos. Los recorridos con vueltas superaron ese mínimo; agregar alternativas no hizo que round-robin eligiera siempre el camino más corto.
+
+En R2 comprobamos turnos independientes: R3–R4–R6 hacia el área de R5 y R1–R0 hacia el área de R1. Las vueltas de un paquete también avanzaron el turno de su área. Al terminar detuvimos los siete procesos.
+
+Usamos los puertos 8880 y 8886 para R0 y R6. En sus tablas agregamos rutas hacia sus vecinos y, para los demás destinos, un siguiente salto que permite continuar el recorrido. Estas son las siete tablas utilizadas, sin ruta default:
+
+**rutas_R0_v4.txt**
+
+```text
+127.0.0.1/24 8881 8881 127.0.0.1 8881
+127.0.0.1/24 8882 8886 127.0.0.1 8882
+```
+
+**rutas_R1_v4.txt**
+
+```text
+127.0.0.1/24 8880 8880 127.0.0.1 8880
+127.0.0.1/24 8882 8886 127.0.0.1 8882
+```
+
+**rutas_R2_v4.txt**
+
+```text
+127.0.0.1/24 8880 8881 127.0.0.1 8881
+127.0.0.1/24 8880 8881 127.0.0.1 8880
+127.0.0.1/24 8883 8886 127.0.0.1 8883
+127.0.0.1/24 8883 8886 127.0.0.1 8884
+127.0.0.1/24 8883 8886 127.0.0.1 8886
+```
+
+**rutas_R3_v4.txt**
+
+```text
+127.0.0.1/24 8880 8882 127.0.0.1 8882
+127.0.0.1/24 8880 8882 127.0.0.1 8885
+127.0.0.1/24 8884 8885 127.0.0.1 8882
+127.0.0.1/24 8884 8885 127.0.0.1 8885
+127.0.0.1/24 8886 8886 127.0.0.1 8886
+```
+
+**rutas_R4_v4.txt**
+
+```text
+127.0.0.1/24 8880 8883 127.0.0.1 8882
+127.0.0.1/24 8880 8883 127.0.0.1 8885
+127.0.0.1/24 8885 8885 127.0.0.1 8882
+127.0.0.1/24 8885 8885 127.0.0.1 8885
+127.0.0.1/24 8886 8886 127.0.0.1 8882
+```
+
+**rutas_R5_v4.txt**
+
+```text
+127.0.0.1/24 8880 8884 127.0.0.1 8884
+127.0.0.1/24 8880 8884 127.0.0.1 8883
+127.0.0.1/24 8886 8886 127.0.0.1 8883
+```
+
+**rutas_R6_v4.txt**
+
+```text
+127.0.0.1/24 8880 8882 127.0.0.1 8882
+127.0.0.1/24 8883 8883 127.0.0.1 8883
+127.0.0.1/24 8884 8885 127.0.0.1 8882
+```
