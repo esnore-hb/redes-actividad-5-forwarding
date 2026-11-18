@@ -96,6 +96,8 @@ def main():
                 print(f"No hay rutas hacia {destino} para paquete {paquete!r}", flush=True)
                 continue
 
+            campos["ttl"] -= 1
+            paquete = create_packet(campos)
             router_socket.sendto(paquete, siguiente_salto)
             print(
                 f"redirigiendo paquete {paquete!r} con destino final {destino} "
