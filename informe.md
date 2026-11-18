@@ -2,14 +2,10 @@
 
 ## 1. Funcionamiento
 
-| Archivo | Función |
-|---|---|
-| `router.py` | Recibe paquetes UDP, consulta rutas y entrega o reenvía mensajes. Incluye las funciones para construir y leer paquetes. |
-| `enviar.py` | Envía un mensaje indicando destino final, router de entrada y TTL. |
-| `prueba_router.py` | Envía un archivo, con un paquete independiente por línea. |
-| `rutas_*.txt` | Definen los siguientes saltos de cada configuración. |
-| `mensajes.txt` / `mensajes_grande.txt` | Archivos de entrada para las pruebas. |
-| `orden_recibido_ttl.txt` | Registro del orden de llegada observado en la prueba de 200 líneas. |
+- `router.py`: recibe, entrega o reenvía paquetes.
+- `enviar.py`: envía un mensaje.
+- `prueba_router.py`: envía un archivo línea por línea.
+- `rutas_*.txt`: tablas de rutas de cada configuración.
 
 Cada router abre un socket UDP en la IP y el puerto recibidos y espera de forma bloqueante. Al llegar un paquete:
 
@@ -19,11 +15,11 @@ Cada router abre un socket UDP en la IP y el puerto recibidos y espera de forma 
 4. Si el destino es otro, consulta `check_routes()`. Sin ruta, descarta el paquete con un aviso.
 5. Si encuentra ruta, resta uno al TTL, reconstruye el paquete con `create_packet()` y lo reenvía. El log indica destino final, router actual y siguiente salto.
 
-Después vuelve a esperar. El destino final del header se conserva durante el recorrido y puede ser distinto del router al que el emisor entrega inicialmente el paquete.
+Después vuelve a esperar. El destino final se conserva; el router de entrada puede ser otro.
 
 ## 2. Ejecución
 
-Usamos Python 3.10 o superior y solo bibliotecas estándar: `socket`, `sys`, `ipaddress` y `pathlib`. No se necesita instalar dependencias. Los siguientes comandos se ejecutan desde la carpeta del repositorio; en sistemas que lo requieran se puede usar `python3` en lugar de `python`.
+Requiere Python 3.10 o superior, sin instalaciones adicionales. Ejecutar desde la carpeta del repositorio. Si corresponde, usar `python3` en lugar de `python`.
 
 ### Red de tres routers
 
@@ -50,7 +46,7 @@ python prueba_router.py "127.0.0.1;8883;10" 127.0.0.1 8881
 python prueba_router.py "127.0.0.1;8883;10" 127.0.0.1 8881 otro_archivo.txt
 ```
 
-El primer argumento contiene `IP_final;puerto_final;TTL`; luego se indica el router inicial. Sin archivo explícito se usa `mensajes.txt`, ubicado junto al script. Las comillas evitan que PowerShell interprete los puntos y coma como comandos separados. El TTL inicial debe estar entre 1 y 255.
+El primer argumento contiene `IP_final;puerto_final;TTL`; luego se indica el router inicial. Sin archivo explícito se usa `mensajes.txt` de la carpeta actual. Las comillas evitan que PowerShell interprete los puntos y coma como comandos separados. El TTL inicial debe estar entre 1 y 255.
 
 ### Otras configuraciones
 
@@ -81,27 +77,31 @@ El paquete llega al default y allí se descarta por falta de ruta externa. El en
 
 ### Tabla simulada y tabla real
 
-Ambas permiten elegir un siguiente salto sin conocer el camino completo. La diferencia que identificamos es cómo agrupan destinos: una tabla real usa prefijos IP e indica el siguiente salto y/o interfaz de salida. En la simulación seguimos el uso de una IP local común y rangos de puertos para distinguir routers. Esto permite representar la red en un solo computador; en una red real, los puertos identifican aplicaciones.
+Ambas indican el siguiente salto según el destino. La tabla real agrupa destinos por prefijos IP; en esta actividad usamos además rangos de puertos para simular routers con una misma IP local. En una red real, los puertos identifican aplicaciones.
 
 ### Formato del paquete y emisores
 
-Seguimos el header sugerido de tamaño fijo: IP de cuatro bytes, puerto de dos y TTL de uno, seguido del mensaje. Usamos big-endian para el puerto y un diccionario con los campos `ip`, `puerto`, `ttl` y `mensaje` para facilitar su lectura y modificación. El mensaje se conserva como bytes hasta su entrega, cuando se decodifica en UTF-8.
+Usamos el header sugerido: IP de 4 bytes, puerto de 2 y TTL de 1. Elegimos big-endian y un diccionario para leer y modificar los campos. Conservamos el mensaje como bytes y lo decodificamos en UTF-8 al entregarlo.
 
-Elegimos argumentos de terminal para repetir envíos sin modificar el código. Reutilizamos `create_packet()` en ambos emisores para mantener un solo formato. UTF-8 permite enviar tildes y ñ. Al leer archivos quitamos solo el salto de línea, conservamos espacios y líneas vacías, y asignamos a cada paquete el mismo TTL inicial porque cada línea es un mensaje independiente.
+Los argumentos de terminal permiten repetir envíos sin editar el código. Ambos emisores reutilizan `create_packet()` para no duplicar el formato. En archivos quitamos solo el salto de línea. Cada línea recibe el mismo TTL inicial porque es un paquete independiente.
+
+### Bibliotecas
+
+Usamos únicamente `socket` para UDP y `sys` para los argumentos. Leemos archivos con `open()` y comprobamos las redes con conversiones y operaciones de enteros de Python, sin bibliotecas adicionales.
 
 ### Round-robin
 
-Guardamos los turnos en un diccionario propio de cada router y lo pasamos a `check_routes()`. Agrupamos las rutas por red y rango de puertos: los destinos de una misma área comparten turno y las otras áreas conservan el suyo. Elegimos la primera área coincidente del archivo y alternamos entre sus siguientes saltos en el orden escrito. El módulo de la cantidad de opciones permite volver al inicio y manejar más de dos rutas.
+Elegimos un diccionario de turnos por router, agrupado por red y rango de puertos. Así, cada área conserva su turno. Tomamos la primera área coincidente y alternamos sus siguientes saltos en el orden del archivo. Usamos módulo para volver al inicio con cualquier cantidad de rutas.
 
-Usamos `ipaddress` para comprobar pertenencia a la red. Aceptamos la escritura `127.0.0.1/24` del material mediante `strict=False`, que la interpreta como la red `127.0.0.0/24`.
+Convertimos cada IP a un entero y desplazamos a la derecha los bits de host. Comparamos los bits restantes según el prefijo CIDR. Así respetamos /24 y también /0 para la ruta default, sin comparar únicamente el texto de la IP.
 
 ### Router default y tablas resultantes
 
-Creamos las tablas `v5` a partir de `v4` para conservar las configuraciones de las pruebas. Agregamos al final de cada tabla `0.0.0.0/0 0 65535 127.0.0.1 7000`. Como conservamos la primera área coincidente, esa posición da prioridad a las rutas internas. El prefijo /0 y el rango completo de puertos cubren los demás destinos.
+Creamos `v5` a partir de `v4`. Pusimos la ruta default al final para que las rutas específicas coincidan primero. `0.0.0.0/0 0 65535` cubre los demás destinos y los envía a `127.0.0.1:7000`.
 
-La tabla del default tiene una ruta directa a cada router y no incluye una ruta hacia sí mismo. Como no simulamos el resto de Internet, descarta los destinos externos y evita devolverlos a la red. No fue necesario agregar código para este comportamiento.
+El default tiene rutas directas a los siete routers. Descarta destinos externos porque no simulamos el resto de Internet. No agregamos una ruta hacia sí mismo para evitar ciclos.
 
-Cada fila contiene red, puerto inicial, puerto final, IP del siguiente salto y puerto del siguiente salto.
+Formato de cada fila: red, puerto inicial, puerto final, IP y puerto del siguiente salto.
 
 **rutas_R0_v5.txt**
 
@@ -224,7 +224,7 @@ Iniciamos los cinco routers con las tablas `v3` y los turnos en cero. Enviamos o
 
 Los ocho mensajes llegaron, pero sus recorridos variaron entre 3 y 7 saltos. El mínimo de la topología es tres: R1 → R2 → R3 → R5, o por R4 en lugar de R3. Los recorridos más largos volvieron a pasar por routers anteriores antes de llegar.
 
-Comprobamos que R2 alternó entre R3 y R4 en sus 16 reenvíos, incluyendo las visitas repetidas de un mismo paquete. Esto explica que no haya necesariamente una única elección de R2 por mensaje. Observamos que round-robin reparte los siguientes saltos, pero no selecciona el camino mínimo. Estos resultados corresponden a esta secuencia de envíos; no garantizan la entrega de cualquier paquete sin TTL.
+R2 alternó entre R3 y R4 en sus 16 reenvíos. Las vueltas también avanzaron los turnos. Round-robin repartió las rutas, pero no eligió siempre el camino mínimo.
 
 ### Saltos en la red ampliada sin TTL
 
@@ -331,4 +331,4 @@ En esta ejecución recibimos 187 de las 200 líneas en R5, registramos 13 descar
 
 Las primeras veinte llegadas fueron: 3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 4, 8, 46, 12, 16, 5, 20, 24, 28. La línea 43 llegó antes que la 4, aunque se envió después. Detectamos 54 descensos de numeración entre llegadas consecutivas.
 
-Los paquetes pueden tomar caminos distintos por round-robin y algunos vuelven a routers anteriores. Por eso, el orden de envío no garantiza el orden de llegada: una línea posterior puede completar antes su recorrido. El TTL limita los saltos, pero no ordena ni retransmite mensajes. Los resultados corresponden a esta ejecución y pueden variar según cómo se intercalen los procesos. Detuvimos los cinco routers al finalizar.
+Los caminos y las vueltas de round-robin cambiaron el orden de llegada. El TTL limitó los saltos, pero no ordenó ni retransmitió mensajes. Los resultados pueden variar entre ejecuciones. Detuvimos los routers al finalizar.

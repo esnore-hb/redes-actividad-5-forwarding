@@ -1,4 +1,3 @@
-from pathlib import Path
 import socket
 import sys
 
@@ -23,9 +22,9 @@ def main():
     if not 1 <= ttl <= 255:
         sys.exit("El TTL inicial debe estar entre 1 y 255.")
 
-    archivo = Path(sys.argv[4]) if len(sys.argv) == 5 else Path(__file__).with_name("mensajes.txt")
+    archivo = sys.argv[4] if len(sys.argv) == 5 else "mensajes.txt"
     cantidad = 0
-    with archivo.open(encoding="utf-8") as lineas:
+    with open(archivo, encoding="utf-8") as lineas:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as emisor:
             for linea in lineas:
                 paquete = create_packet({
@@ -37,7 +36,7 @@ def main():
                 emisor.sendto(paquete, (sys.argv[2], puerto_inicial))
                 cantidad += 1
 
-    print(f"Se enviaron {cantidad} paquetes desde {archivo.name}.")
+    print(f"Se enviaron {cantidad} paquetes desde {archivo}.")
 
 
 if __name__ == "__main__":

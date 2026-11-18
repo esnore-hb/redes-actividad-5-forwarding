@@ -1,4 +1,3 @@
-import ipaddress
 import socket
 import sys
 
@@ -22,10 +21,17 @@ def create_packet(parsed_IP_packet):
     return ip + puerto + ttl + parsed_IP_packet["mensaje"]
 
 
+def ip_a_entero(ip: str) -> int:
+    octetos = [int(numero) for numero in ip.split(".")]
+    if len(octetos) != 4 or any(numero < 0 or numero > 255 for numero in octetos):
+        raise ValueError("La dirección debe contener cuatro números entre 0 y 255.")
+    return int.from_bytes(bytes(octetos), byteorder="big")
+
+
 def check_routes(
     routes_file_name: str, destination_address: tuple[str, int], turnos: dict
 ) -> tuple[str, int] | None:
-    ip_destino = ipaddress.ip_address(destination_address[0])
+    ip_destino = ip_a_entero(destination_address[0])
     puerto_destino = destination_address[1]
     area_elegida = None
     opciones = []
@@ -37,11 +43,17 @@ def check_routes(
                 continue
 
             red, puerto_inicial, puerto_final, ip_siguiente, puerto_siguiente = linea.split()
-            red = ipaddress.ip_network(red, strict=False)
-            area = (red, int(puerto_inicial), int(puerto_final))
+            ip_red, prefijo = red.split("/")
+            prefijo = int(prefijo)
+            if not 0 <= prefijo <= 32:
+                raise ValueError("El prefijo de red debe estar entre 0 y 32.")
+            bits_host = 32 - prefijo
+            # Quitamos los bits de host para comparar solo el prefijo de red.
+            red = ip_a_entero(ip_red) >> bits_host
+            area = (red, prefijo, int(puerto_inicial), int(puerto_final))
             if (
-                ip_destino in red
-                and area[1] <= puerto_destino <= area[2]
+                ip_destino >> bits_host == red
+                and area[2] <= puerto_destino <= area[3]
             ):
                 if area_elegida is None:
                     area_elegida = area
