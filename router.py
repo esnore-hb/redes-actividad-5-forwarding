@@ -80,6 +80,10 @@ def main():
         while True:
             paquete, _ = router_socket.recvfrom(65535)
             campos = parse_packet(paquete)
+            if campos["ttl"] == 0:
+                print(f"Se recibió paquete {paquete!r} con TTL 0", flush=True)
+                continue
+
             destino = (campos["ip"], campos["puerto"])
             direccion_actual = (router_ip, router_puerto)
 
