@@ -271,3 +271,17 @@ Repetimos la prueba de tres routers con `rutas_R2_v2_incorrecta.txt`: R2 devuelv
 Observamos diez reenvíos, cinco por router. R1 envió con TTL 9, 7, 5, 3 y 1; R2 con TTL 8, 6, 4, 2 y 0. Al volver a R1 con TTL cero, el paquete se descartó y apareció el aviso correspondiente. R3 no recibió el mensaje.
 
 Sin TTL habíamos detenido la prueba después de capturar doce reenvíos porque el paquete seguía circulando. Con TTL el ciclo terminó por el descarte, sin detener los procesos para frenarlo. El TTL no corrige la tabla ni permite llegar a R3, pero limita cuántos saltos puede consumir un paquete mal encaminado. Detuvimos los tres routers al finalizar la comprobación.
+
+## 11. Orden de llegada al enviar un archivo grande con TTL
+
+Creamos `mensajes_grande.txt` con 200 líneas numeradas y reiniciamos los cinco routers con las tablas `v3`. Usamos TTL inicial 10 y enviamos el archivo completo sin esperar la llegada de cada línea:
+
+```text
+python prueba_router.py "127.0.0.1;8885;10" 127.0.0.1 8881 mensajes_grande.txt
+```
+
+En esta ejecución recibimos 187 de las 200 líneas en R5, registramos 13 descartes por TTL cero y 0 entregas duplicadas. Guardamos las líneas entregadas, en orden de recepción, en `orden_recibido_ttl.txt`.
+
+Las primeras veinte llegadas fueron: 3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 4, 8, 46, 12, 16, 5, 20, 24, 28. La línea 43 llegó antes que la 4, aunque se envió después. Detectamos 54 descensos de numeración entre llegadas consecutivas.
+
+Los paquetes pueden tomar caminos distintos por round-robin y algunos vuelven a routers anteriores. Por eso, el orden de envío no garantiza el orden de llegada: una línea posterior puede completar antes su recorrido. El TTL limita los saltos, pero no ordena ni retransmite mensajes. Los resultados corresponden a esta ejecución y pueden variar según cómo se intercalen los procesos. Detuvimos los cinco routers al finalizar.
