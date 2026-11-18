@@ -1,46 +1,107 @@
 # Informe — Actividad 5: Forwarding básico
 
-## 1. Comparación entre la tabla de rutas de la actividad y una tabla real
+## 1. Funcionamiento
 
-Al comparar las tablas, identificamos que ambas resuelven la misma pregunta: a qué siguiente salto enviar un paquete según su destino. El router no necesita conocer el camino completo.
+| Archivo | Función |
+|---|---|
+| `router.py` | Recibe paquetes UDP, consulta rutas y entrega o reenvía mensajes. Incluye las funciones para construir y leer paquetes. |
+| `enviar.py` | Envía un mensaje indicando destino final, router de entrada y TTL. |
+| `prueba_router.py` | Envía un archivo, con un paquete independiente por línea. |
+| `rutas_*.txt` | Definen los siguientes saltos de cada configuración. |
+| `mensajes.txt` / `mensajes_grande.txt` | Archivos de entrada para las pruebas. |
+| `orden_recibido_ttl.txt` | Registro del orden de llegada observado en la prueba de 200 líneas. |
 
-La diferencia principal que observamos es cómo se representan los destinos. En una tabla real se agrupan mediante prefijos IP y se indica el siguiente salto y/o la interfaz de salida. En el modelo de la actividad usamos la misma IP local y distinguimos los routers por sus puertos, por lo que las tablas incluyen rangos de puertos. Seguimos esta simplificación para simular la red en un solo computador; en una red real, los puertos identifican aplicaciones.
+Cada router abre un socket UDP en la IP y el puerto recibidos y espera de forma bloqueante. Al llegar un paquete:
 
-## 2. Script de envío (ítem 5)
+1. Lee el header con `parse_packet()`.
+2. Si el TTL es cero, descarta el paquete y muestra el aviso, incluso si era para él.
+3. Si el destino coincide con su dirección, imprime solo el mensaje.
+4. Si el destino es otro, consulta `check_routes()`. Sin ruta, descarta el paquete con un aviso.
+5. Si encuentra ruta, resta uno al TTL, reconstruye el paquete con `create_packet()` y lo reenvía. El log indica destino final, router actual y siguiente salto.
 
-Elegimos recibir los datos como argumentos de terminal para poder repetir los envíos sin modificar el código. En la versión sin TTL colocamos primero el destino final, luego el mensaje y al final el router de entrada:
+Después vuelve a esperar. El destino final del header se conserva durante el recorrido y puede ser distinto del router al que el emisor entrega inicialmente el paquete.
+
+## 2. Ejecución
+
+Usamos Python 3.10 o superior y solo bibliotecas estándar: `socket`, `sys`, `ipaddress` y `pathlib`. No se necesita instalar dependencias. Los siguientes comandos se ejecutan desde la carpeta del repositorio; en sistemas que lo requieran se puede usar `python3` en lugar de `python`.
+
+### Red de tres routers
+
+Abrir una terminal distinta para cada comando y mantenerlas ejecutándose:
 
 ```text
-python enviar.py IP_final puerto_final "mensaje" IP_envio puerto_envio
+python router.py 127.0.0.1 8881 rutas_R1_v2.txt
+python router.py 127.0.0.1 8882 rutas_R2_v2.txt
+python router.py 127.0.0.1 8883 rutas_R3_v2.txt
 ```
 
-Por ejemplo, `python enviar.py 127.0.0.1 8883 "hola" 127.0.0.1 8881` envía a R3 entrando por R1. Usamos UTF-8 para admitir tildes y otros caracteres, y reutilizamos `create_packet()` para mantener un único formato de paquete. Las comillas permiten enviar mensajes con espacios como un solo argumento.
-
-Para comprobar que distinguimos el destino final del router de entrada, enviamos un paquete a R1 con R3 indicado en el header. Verificamos que R1 recibió el paquete, que el destino seguía siendo R3 y que el mensaje con espacios y la letra ñ se recuperó sin cambios. Esta prueba comprueba la recepción y el formato del paquete; el reenvío se implementará más adelante.
-
-## 3. Alternancia de rutas (ítem 8)
-
-Elegimos guardar los turnos en un diccionario propio de cada router y pasarlo a `check_routes()`. Agrupamos las rutas por red y rango de puertos: los destinos de una misma área comparten turno, mientras que las otras áreas conservan el suyo. Respetamos la primera área que coincide en el archivo y alternamos solo entre sus siguientes saltos, en el orden escrito. Usamos el resto de la división por la cantidad de opciones para volver al inicio, sin limitar el número de rutas a dos.
-
-Con las tablas `v3` del enunciado enviamos ocho mensajes de R1 a R5. Todos llegaron y R2 alternó entre R3 y R4. Algunos paquetes volvieron a pasar por R2 antes de llegar: round-robin reparte los envíos, pero no asegura el camino más corto ni evita ciclos.
-
-Para la red ampliada creamos las tablas `v4`. Asignamos el puerto 8880 a R0 y el 8886 a R6. En R2 agregamos una alternativa por R0 hacia el área de R1 y otra por R6 hacia el área de R5. Intercalamos seis envíos en cada sentido: los doce llegaron. R2 mantuvo las secuencias R3–R4–R6 hacia R5 y R1–R0 hacia R1, sin que una avanzara el turno de la otra.
-
-## 4. Router default (ítem 9)
-
-Creamos las tablas `v5` a partir de la red ampliada para conservar las configuraciones anteriores. Agregamos al final de cada tabla esta ruta:
+Desde otra terminal, enviar a R3 entrando por R1:
 
 ```text
-0.0.0.0/0 0 65535 127.0.0.1 7000
+python enviar.py 127.0.0.1 8883 "hola R3" 127.0.0.1 8881 10
 ```
 
-Elegimos la última posición porque `check_routes()` conserva la primera área coincidente. Así, las rutas internas tienen prioridad y solo los demás destinos van al default. El prefijo /0 cubre cualquier dirección IPv4 y el rango 0–65535 cubre todos los puertos.
+Los argumentos son `IP_final puerto_final "mensaje" IP_envio puerto_envio TTL`. R3 imprime `hola R3`; R1 y R2 registran los reenvíos. Para probar entrega local, usar 8881 como puerto final; para probar un destino sin ruta, usar 8884. Detener cada router con Ctrl+C al finalizar.
 
-Para conectar el default con los siete routers, su tabla contiene una ruta directa a cada uno. No le agregamos una ruta hacia sí mismo: como no simulamos el resto de Internet, descarta los destinos externos al no encontrar ruta. Así evitamos que el paquete vuelva a circular por nuestra red.
+### Envío de archivos
 
-Probamos los ocho routers en ejecución y enviamos un paquete con destino final `192.0.2.1:9000` desde cada router R0–R6. Los siete llegaron al default, donde se descartaron por falta de ruta. La dirección externa solo figuraba en el header; los envíos UDP se mantuvieron en localhost. También verificamos la entrega de R1 a R5 y del default a R1. No fue necesario modificar el código.
+```text
+python prueba_router.py "127.0.0.1;8883;10" 127.0.0.1 8881
+python prueba_router.py "127.0.0.1;8883;10" 127.0.0.1 8881 otro_archivo.txt
+```
 
-Las tablas resultantes son las siguientes. Cada fila contiene red, puerto inicial, puerto final, IP del siguiente salto y puerto del siguiente salto.
+El primer argumento contiene `IP_final;puerto_final;TTL`; luego se indica el router inicial. Sin archivo explícito se usa `mensajes.txt`, ubicado junto al script. Las comillas evitan que PowerShell interprete los puntos y coma como comandos separados. El TTL inicial debe estar entre 1 y 255.
+
+### Otras configuraciones
+
+| Tablas | Routers que se deben iniciar | Uso |
+|---|---|---|
+| `v2` | R1–R3, puertos 8881–8883 | Red lineal de tres routers. |
+| `v3` | R1–R5, puertos 8881–8885 | Red original de cinco routers. |
+| `v4` | R0–R6, puertos 8880–8886 | Red ampliada, sin default. |
+| `v5` | R0–R6 y default en 7000 | Red ampliada con salida default. |
+
+Para cada router se usa el mismo comando, cambiando puerto y archivo. Por ejemplo, R5 en la red de cinco routers se inicia con `python router.py 127.0.0.1 8885 rutas_R5_v3.txt`. El default se inicia con `python router.py 127.0.0.1 7000 rutas_default_v5.txt`.
+
+Para reproducir el error de rutas con TTL, detener los routers anteriores y reiniciar R1/R3 con sus tablas `v2`, y R2 con `rutas_R2_v2_incorrecta.txt`. Después ejecutar:
+
+```text
+python enviar.py 127.0.0.1 8883 "prueba de ciclo" 127.0.0.1 8881 10
+```
+
+Para el destino externo, iniciar todos los routers con las tablas `v5` y enviar:
+
+```text
+python enviar.py 192.0.2.1 9000 "destino externo" 127.0.0.1 8881 10
+```
+
+El paquete llega al default y allí se descarta por falta de ruta externa. El envío UDP permanece en localhost.
+
+## 3. Decisiones de diseño
+
+### Tabla simulada y tabla real
+
+Ambas permiten elegir un siguiente salto sin conocer el camino completo. La diferencia que identificamos es cómo agrupan destinos: una tabla real usa prefijos IP e indica el siguiente salto y/o interfaz de salida. En la simulación seguimos el uso de una IP local común y rangos de puertos para distinguir routers. Esto permite representar la red en un solo computador; en una red real, los puertos identifican aplicaciones.
+
+### Formato del paquete y emisores
+
+Seguimos el header sugerido de tamaño fijo: IP de cuatro bytes, puerto de dos y TTL de uno, seguido del mensaje. Usamos big-endian para el puerto y un diccionario con los campos `ip`, `puerto`, `ttl` y `mensaje` para facilitar su lectura y modificación. El mensaje se conserva como bytes hasta su entrega, cuando se decodifica en UTF-8.
+
+Elegimos argumentos de terminal para repetir envíos sin modificar el código. Reutilizamos `create_packet()` en ambos emisores para mantener un solo formato. UTF-8 permite enviar tildes y ñ. Al leer archivos quitamos solo el salto de línea, conservamos espacios y líneas vacías, y asignamos a cada paquete el mismo TTL inicial porque cada línea es un mensaje independiente.
+
+### Round-robin
+
+Guardamos los turnos en un diccionario propio de cada router y lo pasamos a `check_routes()`. Agrupamos las rutas por red y rango de puertos: los destinos de una misma área comparten turno y las otras áreas conservan el suyo. Elegimos la primera área coincidente del archivo y alternamos entre sus siguientes saltos en el orden escrito. El módulo de la cantidad de opciones permite volver al inicio y manejar más de dos rutas.
+
+Usamos `ipaddress` para comprobar pertenencia a la red. Aceptamos la escritura `127.0.0.1/24` del material mediante `strict=False`, que la interpreta como la red `127.0.0.0/24`.
+
+### Router default y tablas resultantes
+
+Creamos las tablas `v5` a partir de `v4` para conservar las configuraciones de las pruebas. Agregamos al final de cada tabla `0.0.0.0/0 0 65535 127.0.0.1 7000`. Como conservamos la primera área coincidente, esa posición da prioridad a las rutas internas. El prefijo /0 y el rango completo de puertos cubren los demás destinos.
+
+La tabla del default tiene una ruta directa a cada router y no incluye una ruta hacia sí mismo. Como no simulamos el resto de Internet, descarta los destinos externos y evita devolverlos a la red. No fue necesario agregar código para este comportamiento.
+
+Cada fila contiene red, puerto inicial, puerto final, IP del siguiente salto y puerto del siguiente salto.
 
 **rutas_R0_v5.txt**
 
@@ -121,8 +182,20 @@ Las tablas resultantes son las siguientes. Cada fila contiene red, puerto inicia
 127.0.0.1/24 8886 8886 127.0.0.1 8886
 ```
 
-## 5. Prueba de una tabla incorrecta sin TTL
+## 4. Pruebas y resultados
 
+Las pruebas sin TTL se realizaron antes de incorporarlo. El código entregado es la versión final con TTL; los comandos actuales usan ese formato. Reiniciamos los routers al comenzar cada configuración para partir con los turnos en cero. Los saltos contados corresponden a reenvíos entre routers, sin incluir el envío inicial del script.
+
+### Comprobaciones de implementación
+
+- Construimos paquetes manualmente y comprobamos que `create_packet(parse_packet(paquete))` recupera exactamente sus bytes. Incluimos TTL 0, 1 y 255, mensajes vacíos, binarios y UTF-8.
+- Verificamos entrega local, reenvío R1 → R2 → R3 y descarte de un destino sin ruta. Los routers siguieron recibiendo después de los descartes.
+- Con destino R3, TTL inicial 1 se descartó en R2, TTL 2 en R3 y TTL 3 permitió la entrega con TTL 1. También comprobamos el descarte de TTL cero para destino local.
+- En las redes de cinco y siete routers verificamos la alternancia y los turnos independientes por área, incluyendo tres rutas posibles en R2.
+- Con las tablas `v5`, siete paquetes externos, uno desde cada router R0–R6, llegaron al default y se descartaron allí. También comprobamos entrega R1 → R5 y default → R1.
+- El archivo predeterminado entregó sus tres líneas por R1 → R2 → R3 con TTL 10. Un archivo alternativo conservó tildes, espacios, líneas vacías y una última línea sin salto final.
+
+### Tabla incorrecta sin TTL
 Guardamos el error en `rutas_R2_v2_incorrecta.txt` para conservar la tabla correcta. Mantuvimos las tablas `v2` de R1 y R3 y cambiamos en R2 el siguiente salto hacia el puerto 8883 por el puerto 8881:
 
 ```text
@@ -132,9 +205,9 @@ Guardamos el error en `rutas_R2_v2_incorrecta.txt` para conservar la tabla corre
 
 Enviamos un solo mensaje a R3 entrando por R1. Capturamos doce reenvíos consecutivos alternando R1 → R2 y R2 → R1, sin cambios en los bytes ni en el destino final del paquete. R3 no recibió el mensaje durante la prueba y detuvimos los tres procesos al confirmar el ciclo.
 
-El error hace que R2 devuelva a R1 lo que debería enviar a R3. Como R1 vuelve a elegir R2 y todavía no hay TTL, el código no tiene una condición que limite esos reenvíos.
+El error hace que R2 devuelva a R1 lo que debería enviar a R3. En esa versión, sin TTL, R1 volvía a elegir R2 y no había una condición que limitara los reenvíos.
 
-## 6. Saltos en la red de cinco routers sin TTL
+### Saltos en cinco routers sin TTL
 
 Iniciamos los cinco routers con las tablas `v3` y los turnos en cero. Enviamos ocho mensajes distintos de R1 a R5, uno por uno, esperando cada entrega para identificar sus reenvíos. Contamos solo los saltos entre routers; el envío inicial del script a R1 no se incluye.
 
@@ -153,7 +226,7 @@ Los ocho mensajes llegaron, pero sus recorridos variaron entre 3 y 7 saltos. El 
 
 Comprobamos que R2 alternó entre R3 y R4 en sus 16 reenvíos, incluyendo las visitas repetidas de un mismo paquete. Esto explica que no haya necesariamente una única elección de R2 por mensaje. Observamos que round-robin reparte los siguientes saltos, pero no selecciona el camino mínimo. Estos resultados corresponden a esta secuencia de envíos; no garantizan la entrega de cualquier paquete sin TTL.
 
-## 7. Saltos en la red ampliada sin TTL
+### Saltos en la red ampliada sin TTL
 
 Reiniciamos los siete routers con las tablas `v4` y los turnos en cero. Intercalamos seis mensajes R1 → R5 y seis R5 → R1, esperando cada entrega antes del siguiente envío. Contamos únicamente los reenvíos entre routers.
 
@@ -238,33 +311,7 @@ Usamos los puertos 8880 y 8886 para R0 y R6. En sus tablas agregamos rutas hacia
 127.0.0.1/24 8884 8885 127.0.0.1 8882
 ```
 
-## 8. Incorporación del campo TTL
-
-Seguimos la distribución sugerida: cuatro bytes de IP, dos de puerto y uno de TTL, antes del mensaje. Mantener posiciones fijas nos permite separar el header sin delimitadores. `parse_packet()` devuelve el TTL como entero y `create_packet()` lo escribe en un byte; el mensaje sigue siendo bytes.
-
-Agregamos el TTL al final de los argumentos del emisor para conservar el orden anterior. Su interfaz actual es:
-
-```text
-python enviar.py IP_final puerto_final "mensaje" IP_envio puerto_envio TTL
-python enviar.py 127.0.0.1 8883 "hola" 127.0.0.1 8881 10
-```
-
-El emisor exige un TTL inicial entre 1 y 255. Las funciones de paquetes también admiten cero, porque un paquete puede alcanzar ese valor durante el recorrido. Construimos manualmente un paquete con TTL 10 y comprobamos que parsearlo y reconstruirlo recupera exactamente sus bytes. También probamos TTL 0, 1 y 255, mensajes vacíos, binarios y UTF-8, y la recepción UDP del paquete generado por el emisor. En esta etapa todavía no disminuimos el TTL ni descartamos paquetes por su valor.
-
-## 9. Envío de un archivo línea por línea
-
-Elegimos usar `mensajes.txt`, ubicado junto al script, como archivo predeterminado para mantener los tres argumentos pedidos. Agregamos un cuarto argumento opcional para probar otros archivos sin cambiar el código:
-
-```text
-python prueba_router.py "127.0.0.1;8885;10" 127.0.0.1 8881
-python prueba_router.py "127.0.0.1;8885;10" 127.0.0.1 8881 otro_archivo.txt
-```
-
-Las comillas evitan que PowerShell interprete los puntos y coma como comandos separados. Leemos el archivo en UTF-8 y enviamos cada línea en un datagrama distinto, reutilizando `create_packet()`. Quitamos únicamente el salto de línea; conservamos los espacios y las líneas vacías. Cada paquete parte con el mismo TTL inicial, porque corresponde a un mensaje independiente.
-
-Probamos el archivo predeterminado en la red R1 → R2 → R3 con destino R3 y TTL 10: llegaron las tres líneas. También comprobamos un archivo alternativo con saltos CRLF, una línea vacía, espacios, caracteres con tilde y una última línea sin salto final. Los mensajes recuperados coincidieron con el contenido esperado. Esta prueba verifica el envío; la observación del orden con cinco routers corresponde a la siguiente sección de pruebas.
-
-## 10. Tabla incorrecta con TTL inicial 10
+### Tabla incorrecta con TTL 10
 
 Repetimos la prueba de tres routers con `rutas_R2_v2_incorrecta.txt`: R2 devuelve a R1 los paquetes destinados a R3. Enviamos un único mensaje a R3 entrando por R1, esta vez con TTL 10.
 
@@ -272,7 +319,7 @@ Observamos diez reenvíos, cinco por router. R1 envió con TTL 9, 7, 5, 3 y 1; R
 
 Sin TTL habíamos detenido la prueba después de capturar doce reenvíos porque el paquete seguía circulando. Con TTL el ciclo terminó por el descarte, sin detener los procesos para frenarlo. El TTL no corrige la tabla ni permite llegar a R3, pero limita cuántos saltos puede consumir un paquete mal encaminado. Detuvimos los tres routers al finalizar la comprobación.
 
-## 11. Orden de llegada al enviar un archivo grande con TTL
+### Orden del archivo grande con TTL
 
 Creamos `mensajes_grande.txt` con 200 líneas numeradas y reiniciamos los cinco routers con las tablas `v3`. Usamos TTL inicial 10 y enviamos el archivo completo sin esperar la llegada de cada línea:
 
